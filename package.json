@@ -8,8 +8,8 @@
   },
   "scripts": {
     "test": "node test.js",
-    "preinstall": "node lib/install-ozw.js; cd deps/open-zwave; make && make install; sed -i '$a LD_LIBRARY_PATH=/usr/local/lib' /etc/environment;",
-    "install": "node-gyp rebuild"
+    "preinstall": "node lib/install-ozw.js;",
+    "install": " cd deps/open-zwave; make && make install; sed -i '$a LD_LIBRARY_PATH=/usr/local/lib' /etc/environment; cd ../..; node-gyp rebuild"
   },
   "repository": {
     "type": "git",
