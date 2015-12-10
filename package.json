@@ -8,8 +8,8 @@
   },
   "scripts": {
     "test": "node test.js",
-    "preinstall": "node lib/install-ozw.js; cd deps/open-zwave",
-    "install": "make && make install"
+    "preinstall": "node lib/install-ozw.js;",
+    "install": " cd deps/open-zwave; make && make install"
   },
   "repository": {
     "type": "git",
