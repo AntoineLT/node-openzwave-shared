@@ -39,7 +39,10 @@ namespace OZW {
 
 		emit_cb = new Nan::Callback(callbackHandle);
 
-		//std::cout << "~~~~ emit_cb:" << emit_cb << " isEmpty? " << emit_cb->IsEmpty() << "\n";
+		OZW* self = ObjectWrap::Unwrap<OZW>(info.This());
+
+		OpenZWave::Options::Create(self->config_path, self->userpath, self->option_overrides);
+		OpenZWave::Options::Get()->Lock();
 
 		OpenZWave::Manager::Create();
 		OpenZWave::Manager* mgr = OpenZWave::Manager::Get();

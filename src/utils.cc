@@ -36,16 +36,10 @@ namespace OZW {
 	* Return the node for this request.
 	*/
 	NodeInfo *get_node_info(uint8 nodeid) {
-		std::list<NodeInfo *>::iterator it;
-
-		NodeInfo *node;
-
-		for (it = znodes.begin(); it != znodes.end(); ++it) {
-			node = *it;
-			if (node->nodeid == nodeid)
-				return node;
-		}
-
+		mutex::scoped_lock sl(znodes_mutex);
+		if (znodes.find(nodeid) != znodes.end()) {
+			return znodes[nodeid];
+		};
 		return NULL;
 	}
 
@@ -155,6 +149,13 @@ namespace OZW {
 				break;
 			}
 			case OpenZWave::ValueID::ValueType_Raw: {
+				uint8 *val, len;
+				OpenZWave::Manager::Get()->GetValueAsRaw(value, &val, &len);
+				Nan::Set(valobj,
+					Nan::New<String>("value").ToLocalChecked(),
+					Nan::CopyBuffer((char *)val, len).ToLocalChecked()
+				);
+				delete [] val;
 				break;
 			}
 			default: {
@@ -164,14 +165,46 @@ namespace OZW {
 		}
 	}
 
+	// populate a v8 Object with useful information about a ZWave node
+	void getV8ValueForZWaveNode(
+			OpenZWave::Manager *mgr,
+			v8::Local<v8::Object>& nodeobj,
+			uint32 homeid, uint8 nodeid
+	) {
+		Nan::Set(nodeobj,
+			Nan::New<String>("manufacturer").ToLocalChecked(),
+			Nan::New<String>(mgr->GetNodeManufacturerName(homeid, nodeid).c_str()).ToLocalChecked());
+		Nan::Set(nodeobj,
+			Nan::New<String>("manufacturerid").ToLocalChecked(),
+			Nan::New<String>(mgr->GetNodeManufacturerId(homeid, nodeid).c_str()).ToLocalChecked());
+		Nan::Set(nodeobj,
+			Nan::New<String>("product").ToLocalChecked(),
+			Nan::New<String>(mgr->GetNodeProductName(homeid, nodeid).c_str()).ToLocalChecked());
+		Nan::Set(nodeobj,
+			Nan::New<String>("producttype").ToLocalChecked(),
+			Nan::New<String>(mgr->GetNodeProductType(homeid, nodeid).c_str()).ToLocalChecked());
+		Nan::Set(nodeobj,
+			Nan::New<String>("productid").ToLocalChecked(),
+			Nan::New<String>(mgr->GetNodeProductId(homeid, nodeid).c_str()).ToLocalChecked());
+		Nan::Set(nodeobj,
+			Nan::New<String>("type").ToLocalChecked(),
+			Nan::New<String>(mgr->GetNodeType(homeid, nodeid).c_str()).ToLocalChecked());
+		Nan::Set(nodeobj,
+			Nan::New<String>("name").ToLocalChecked(),
+			Nan::New<String>(mgr->GetNodeName(homeid, nodeid).c_str()).ToLocalChecked());
+		Nan::Set(nodeobj,
+			Nan::New<String>("loc").ToLocalChecked(),
+			Nan::New<String>(mgr->GetNodeLocation(homeid, nodeid).c_str()).ToLocalChecked());
+	}
+
 	// create a V8 object from a ZWave value
 	Local<Object> zwaveValue2v8Value(OpenZWave::ValueID value) {
-		Local <Object> valobj = Nan::New<Object>();
+		Nan::EscapableHandleScope handle_scope;
 
 		char buffer[15];
-
 		sprintf(buffer, "%d-%d-%d-%d", value.GetNodeId(), value.GetCommandClassId(), value.GetInstance(), value.GetIndex());
 
+		Local <Object> valobj = Nan::New<Object>();
 		Nan::Set(valobj,
 			Nan::New<String>("value_id").ToLocalChecked(),
 			Nan::New<String>(buffer).ToLocalChecked());
@@ -184,10 +217,12 @@ namespace OZW {
 		//Nan::Set(valobj, Nan::New<String>("id"), Nan::New<Integer>(value.GetId()));
 		Nan::Set(valobj, Nan::New<String>("node_id").ToLocalChecked(),   Nan::New<Integer>(value.GetNodeId()));
 		Nan::Set(valobj, Nan::New<String>("class_id").ToLocalChecked(),  Nan::New<Integer>(value.GetCommandClassId()));
-		Nan::Set(valobj, Nan::New<String>("type").ToLocalChecked(),      Nan::New<String> (
-                         OpenZWave::Value::GetTypeNameFromEnum(value.GetType())).ToLocalChecked());
-		Nan::Set(valobj, Nan::New<String>("genre").ToLocalChecked(),     Nan::New<String> (
-                         OpenZWave::Value::GetGenreNameFromEnum(value.GetGenre())).ToLocalChecked());
+		Nan::Set(valobj, Nan::New<String>("type").ToLocalChecked(),
+			Nan::New<String> (
+				OpenZWave::Value::GetTypeNameFromEnum(value.GetType())).ToLocalChecked());
+		Nan::Set(valobj, Nan::New<String>("genre").ToLocalChecked(),
+			Nan::New<String> (
+				OpenZWave::Value::GetGenreNameFromEnum(value.GetGenre())).ToLocalChecked());
 		Nan::Set(valobj, Nan::New<String>("instance").ToLocalChecked(),  Nan::New<Integer>(value.GetInstance()));
 		Nan::Set(valobj, Nan::New<String>("index").ToLocalChecked(),     Nan::New<Integer>(value.GetIndex()));
 		Nan::Set(valobj, Nan::New<String>("label").ToLocalChecked(),     Nan::New<String> (mgr->GetValueLabel(value).c_str()).ToLocalChecked());
@@ -200,17 +235,18 @@ namespace OZW {
 		Nan::Set(valobj, Nan::New<String>("min").ToLocalChecked(), Nan::New<Integer>(OpenZWave::Manager::Get()->GetValueMin(value)));
 		Nan::Set(valobj, Nan::New<String>("max").ToLocalChecked(), Nan::New<Integer>(OpenZWave::Manager::Get()->GetValueMax(value)));
 		setValObj(valobj, value);
-		return valobj;
+
+  	return handle_scope.Escape(valobj);
 	}
 
 	// create a V8 object from a ZWave scene value
 	Local<Object> zwaveSceneValue2v8Value(uint8 sceneId, OpenZWave::ValueID value) {
-		Local <Object> valobj = Nan::New<Object>();
+		Nan::EscapableHandleScope handle_scope;
 
 		char buffer[15];
-
 		sprintf(buffer, "%d-%d-%d-%d", value.GetNodeId(), value.GetCommandClassId(), value.GetInstance(), value.GetIndex());
 
+		Local <Object> valobj = Nan::New<Object>();
 		Nan::Set(valobj,
 			Nan::New<String>("value_id").ToLocalChecked(),
 			Nan::New<String>(buffer).ToLocalChecked()
@@ -235,11 +271,11 @@ namespace OZW {
 		Nan::Set(valobj, Nan::New<String>("min").ToLocalChecked(), Nan::New<Integer>(OpenZWave::Manager::Get()->GetValueMin(value)));
 		Nan::Set(valobj, Nan::New<String>("max").ToLocalChecked(), Nan::New<Integer>(OpenZWave::Manager::Get()->GetValueMax(value)));
 		setValObj(valobj, value);
-		return valobj;
+		return handle_scope.Escape(valobj);
 	}
 
   bool isOzwValue(Local<Object>& o) {
-		return (!Nan::HasOwnProperty(o, Nan::New<String>("nodeid").ToLocalChecked()).IsNothing()
+		return (!Nan::HasOwnProperty(o, Nan::New<String>("node_id").ToLocalChecked()).IsNothing()
 			&& !Nan::HasOwnProperty(o, Nan::New<String>("class_id").ToLocalChecked()).IsNothing()
 			&& !Nan::HasOwnProperty(o, Nan::New<String>("instance").ToLocalChecked()).IsNothing()
 			&& !Nan::HasOwnProperty(o, Nan::New<String>("index").ToLocalChecked()).IsNothing());
@@ -260,20 +296,15 @@ namespace OZW {
 		if ( (info.Length() >= offset) && info[offset]->IsObject() ) {
 			Local<Object> o = info[offset]->ToObject();
 			if (isOzwValue(o)) {
-				nodeid   = Nan::Get(o, Nan::New<String>("nodeid").ToLocalChecked()).ToLocalChecked()->ToNumber()->Value();
+				nodeid   = Nan::Get(o, Nan::New<String>("node_id").ToLocalChecked()).ToLocalChecked()->ToNumber()->Value();
 				comclass = Nan::Get(o, Nan::New<String>("class_id").ToLocalChecked()).ToLocalChecked()->ToNumber()->Value();
 				instance = Nan::Get(o, Nan::New<String>("instance").ToLocalChecked()).ToLocalChecked()->ToNumber()->Value();
 				index    = Nan::Get(o, Nan::New<String>("index").ToLocalChecked()).ToLocalChecked()->ToNumber()->Value();
 			} else {
 				return ( NULL );
 			}
-		} else if (
-				(info.Length() >= offset+4)
-			&& info[offset]->IsNumber()
-			&& info[offset+1]->IsNumber()
-			&& info[offset+2]->IsNumber()
-			&& info[offset+3]->IsNumber()
-		) { // legacy mode
+		} else if ((info.Length() >= offset+4)) {
+			// legacy mode
 			nodeid   = info[offset]->ToNumber()->Value();
 			comclass = info[offset+1]->ToNumber()->Value();
 			instance = info[offset+2]->ToNumber()->Value();

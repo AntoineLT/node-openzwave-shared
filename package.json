@@ -24,10 +24,18 @@
   ],
   "author": "Elias Karakoulakis <elias.karakoulakis@gmail.com>",
   "contributors": [
-    "Jonathan Perkin (http://www.perkin.org.uk/)",
-    "Thibaut CONSTANT",
     "davide-lr",
-    "Luke Hertert (http://werul.com)"
+    "Justin Hammond",
+    "Jonathan Perkin (http://www.perkin.org.uk/)",
+    "Luke Hertert (http://werul.com)",
+    "Thibaut CONSTANT",
+    "Henry Rawas",
+    "Rushi Desai",
+    "Steven Adams",
+    "Jan Erik Hanssen",
+    "Brennan Kinney",
+    "Adam Rensel",
+    "David Moxey"
   ],
   "license": {
     "type": "ISC",
