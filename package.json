@@ -8,7 +8,7 @@
   },
   "scripts": {
     "test": "node test.js",
-    "preinstall": "node lib/install-ozw.js; git clone https://github.com/OpenZWave/open-zwave.git deps/open-zwave/; cd deps/open-zwave; git checkout e33f9558fbd5d3c478590eb1dcbe6e1d915d6c9b; make && make install; ldconfig /usr/local/lib",
+    "preinstall": "node lib/install-ozw.js; git clone --depth=1 https://github.com/OpenZWave/open-zwave.git deps/open-zwave/; cd deps/open-zwave; git checkout e33f9558fbd5d3c478590eb1dcbe6e1d915d6c9b; make && make install; ldconfig /usr/local/lib",
     "install": "node-gyp rebuild"
   },
   "repository": {
