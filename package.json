@@ -8,7 +8,7 @@
   },
   "scripts": {
     "test": "node test.js",
-    "preinstall": "git clone --depth=1 https://github.com/TheThingBox/open-zwave deps/open-zwave/; cd deps/open-zwave; make && make install; ldconfig /usr/local/lib",
+    "preinstall": "apt-get update; apt-get install -y libudev-dev pkg-config; git clone --depth=1 https://github.com/TheThingBox/open-zwave deps/open-zwave/; cd deps/open-zwave; make && make install; ldconfig /usr/local/lib",
     "install": "node-gyp rebuild"
   },
   "repository": {
