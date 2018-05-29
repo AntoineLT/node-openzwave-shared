@@ -8,7 +8,7 @@
   },
   "scripts": {
     "test": "node test.js",
-    "preinstall": "apt-get update; apt-get install -y libudev-dev pkg-config; git clone --depth=1 https://github.com/TheThingBox/open-zwave deps/open-zwave/; cd deps/open-zwave; make && make install; ldconfig /usr/local/lib",
+    "preinstall": "apt-get update; apt-get install -y libudev-dev libudev0 ; wget \"https://github.com/ekarak/openzwave-debs-raspbian/raw/master/v1.4.79/openzwave_1.4.79.gfaea7dd_armhf.deb\" ; wget \"https://github.com/ekarak/openzwave-debs-raspbian/raw/master/v1.4.79/libopenzwave1.3_1.4.79.gfaea7dd_armhf.deb\" ; wget \"https://github.com/ekarak/openzwave-debs-raspbian/raw/master/v1.4.79/libopenzwave1.3-dev_1.4.79.gfaea7dd_armhf.deb\" ; dpkg -i *openzwave*.deb",
     "install": "node-gyp rebuild"
   },
   "repository": {
