@@ -36,7 +36,7 @@ namespace OZW {
 		Nan::HandleScope scope;
 
     // get the user config directory
-		std::string modulefilename = std::string(*v8::String::Utf8Value(
+		std::string modulefilename = std::string(*Nan::Utf8String(
 			Nan::Get(module,
           Nan::New("filename").ToLocalChecked()
 		  ).ToLocalChecked()
@@ -209,41 +209,46 @@ namespace OZW {
 		OZW* self = new OZW();
 		self->Wrap(info.This());
 		std::string option_overrides;
+		bool log_initialisation = true;
 		// Options are global for all drivers and can only be set once.
 		if (info.Length() > 0) {
 			Local < Object > opts = Nan::To<Object>(info[0]).ToLocalChecked();
 			Local < Array > props = Nan::GetOwnPropertyNames(opts).ToLocalChecked();
 			for (unsigned int i = 0; i < props->Length(); ++i) {
 				Local<Value> key       = props->Get(i);
-				std::string  keyname   = *v8::String::Utf8Value(key);
+				std::string  keyname   = *Nan::Utf8String(key);
 				Local<Value> argval    = Nan::Get(opts, key).ToLocalChecked();
-				std::string  argvalstr = *v8::String::Utf8Value(argval);
+				std::string  argvalstr = *Nan::Utf8String(argval);
 				// UserPath is directly passed to Manager->Connect()
 				// scan for OpenZWave options.xml in the nodeJS module's '/config' subdirectory
 				if (keyname == "UserPath") {
 					ozw_userpath.assign(argvalstr);
 				} else if (keyname == "ConfigPath") {
 					ozw_config_path.assign(argvalstr);
+				} else if (keyname == "LogInitialisation") {
+					log_initialisation = argval->BooleanValue();
 				} else {
 					option_overrides += " --" + keyname + " " + argvalstr;
 				}
 			}
 		}
 
-		std::ostringstream versionstream;
-		versionstream << ozw_vers_major << "." << ozw_vers_minor << "." << ozw_vers_revision;
-		std::cout << "Initialising OpenZWave " << versionstream.str() << " binary addon for Node.JS.\n";
+		if (log_initialisation) {
+			std::ostringstream versionstream;
+			versionstream << ozw_vers_major << "." << ozw_vers_minor << "." << ozw_vers_revision;
+			std::cout << "Initialising OpenZWave " << versionstream.str() << " binary addon for Node.JS.\n";
 
 #if OPENZWAVE_SECURITY == 1
-		std::cout << "\tOpenZWave Security API is ENABLED\n";
+			std::cout << "\tOpenZWave Security API is ENABLED\n";
 #else
-		std::cout << "\tSecurity API not found, using legacy BeginControllerCommand() instead\n";
+			std::cout << "\tSecurity API not found, using legacy BeginControllerCommand() instead\n";
 #endif
 
-		std::cout << "\tZWave device db    : " << ozw_config_path << "\n";
-		std::cout << "\tUser settings path : " << ozw_userpath << "\n";
-		if (option_overrides.length() > 0) {
-			std::cout << "\tOption Overrides :" << option_overrides << "\n";
+			std::cout << "\tZWave device db    : " << ozw_config_path << "\n";
+			std::cout << "\tUser settings path : " << ozw_userpath << "\n";
+			if (option_overrides.length() > 0) {
+				std::cout << "\tOption Overrides :" << option_overrides << "\n";
+			}
 		}
 
 		// Store configuration data for connect.
@@ -252,7 +257,7 @@ namespace OZW {
 		self->option_overrides = option_overrides;
 
 		ctx_obj = Nan::Persistent<Object>(info.This());
-
+		resource = new Nan::AsyncResource("openzwave.callback", info.This());
 		//
 		info.GetReturnValue().Set(info.This());
 	}
