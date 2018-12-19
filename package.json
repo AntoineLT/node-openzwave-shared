@@ -15,7 +15,7 @@
     "type": "git",
     "url": "git://github.com/OpenZWave/node-openzwave-shared.git"
   },
-  "keywords": [
+  "keywords": [ 
     "zwave",
     "z-wave",
     "home automation",
