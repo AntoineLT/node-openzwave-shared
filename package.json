@@ -9,7 +9,7 @@
   },
   "scripts": {
     "test": "node test.js",
-    "preinstall": "apt-get update; apt-get install -y libudev-dev pkg-config; git clone https://github.com/OpenZWave/open-zwave.git deps/open-zwave/; cd deps/open-zwave; git checkout 98c3bde5910edd01a7efca8303146449159b221b; make && make install; ldconfig /usr/local/lib",
+    "preinstall": "apt-get update; apt-get install -yq libudev-dev pkg-config; git clone https://github.com/OpenZWave/open-zwave.git deps/open-zwave/; cd deps/open-zwave; git checkout 890f24b7e88f488eee464ed14c01fbceb276cf2a; rm .git -R ; make && make install; ldconfig /usr/local/lib",
     "install": "node-gyp rebuild"
   },
   "repository": {
