@@ -1,14 +1,15 @@
 {
   "name": "openzwave-shared",
-  "version": "1.4.6",
+  "version": "1.5.5",
   "description": "Node.JS bindings for OpenZWave including management and security functions",
   "main": "./lib/openzwave-shared.js",
+  "types": "./types/openzwave-shared.d.ts",
   "dependencies": {
-    "nan": ">=2.10.0"
+    "nan": ">=2.14.0"
   },
   "scripts": {
     "test": "node test.js",
-    "preinstall": "apt-get update; apt-get install -y libudev-dev pkg-config; git clone https://github.com/OpenZWave/open-zwave.git deps/open-zwave/; cd deps/open-zwave; git checkout 98c3bde5910edd01a7efca8303146449159b221b; make && make install; ldconfig /usr/local/lib",
+    "preinstall": "apt-get update; apt-get install -yq libudev-dev pkg-config; git clone https://github.com/OpenZWave/open-zwave.git deps/open-zwave/; cd deps/open-zwave; git checkout 1d39efbb88e971339c15316f0d149963cc1e58b5; rm .git -R ; make && make install; ldconfig /usr/local/lib",
     "install": "node-gyp rebuild"
   },
   "repository": {
@@ -44,7 +45,11 @@
     "Michael Franken",
     "Matt Eastman",
     "codepeon",
-    "Casey Foster"
+    "Casey Foster",
+    "vibr77",
+    "blackshadev (https://github.com/blackshadev)",
+    "Daniel Lando (https://github.com/robertsLando)",
+    "Jorge Schrauwen (https://blackdot.be)"
   ],
   "license": {
     "type": "ISC",

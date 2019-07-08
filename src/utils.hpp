@@ -20,6 +20,40 @@
 #define stringify( x ) stringify_literal( x )
 #define stringify_literal( x ) # x
 
+#if OPENZWAVE_EXCEPTIONS
+#define OZWManager(METHOD,...)               \
+    try {                                    \
+	    OpenZWave::Manager::Get() -> METHOD ( __VA_ARGS__ ); \
+	} catch ( OpenZWave::OZWException& e ) { \
+		char buffer [200];                   \
+		snprintf(buffer, 200, "Exception calling OpenZWave::Manager::%s in %s(%d): %s",      \
+			stringify(METHOD), e.GetFile().c_str(), e.GetLine(), e.GetMsg().c_str()); \
+		Nan::ThrowError( buffer );           \
+	}
+
+#define OZWManagerAssign(VALUE,METHOD,...)    \
+    try {                                     \
+	    VALUE = OpenZWave::Manager::Get() -> METHOD ( __VA_ARGS__ ); \
+	} catch ( OpenZWave::OZWException& e ) {  \
+		char buffer [200];                    \
+		snprintf(buffer, 200, "Exception calling OpenZWave::Manager::%s in %s(%d): %s",     \
+			stringify(METHOD), e.GetFile().c_str(), e.GetLine(), e.GetMsg().c_str()); \
+		Nan::ThrowError( buffer );            \
+	}
+
+#else
+#define OZWManager(METHOD,...)                     OpenZWave::Manager::Get()->METHOD(__VA_ARGS__)
+#define OZWManagerAssign(VALUE,METHOD,...) VALUE = OpenZWave::Manager::Get()->METHOD(__VA_ARGS__)
+#endif
+
+typedef 
+#if OPENZWAVE_16 
+	uint16_t
+#else
+	uint8_t
+#endif
+OZWValueIdIndex;
+
 #define AddIntegerProp(OBJ,PROPNAME,PROPVALUE) \
 	Nan::Set(OBJ,                                \
 		Nan::New<v8::String>( #PROPNAME ).ToLocalChecked(),  \
@@ -28,7 +62,7 @@
 #define AddBooleanProp(OBJ,PROPNAME,PROPVALUE) \
 	Nan::Set(OBJ,                                \
 		Nan::New<v8::String>( #PROPNAME ).ToLocalChecked(),  \
-		Nan::New<v8::Boolean>( PROPVALUE )->ToBoolean());
+		Nan::New<v8::Boolean>( PROPVALUE ));
 
 #define AddStringProp(OBJ,PROPNAME,PROPVALUE) \
 	Nan::Set(OBJ,                               \
@@ -46,8 +80,8 @@
 
 #define CheckMinArgs(NUM, DESC) \
 	if(info.Length() < NUM) { \
-		char buffer [100]; \
-		sprintf(buffer, "This OpenZwave method requires at least %d argument(s): %s", NUM, DESC); \
+		char buffer [200]; \
+		snprintf(buffer, 200, "This OpenZwave method requires at least %d argument(s): %s", NUM, DESC); \
 		Nan::ThrowError( buffer ); \
 	}
 
@@ -96,17 +130,20 @@ namespace OZW {
 namespace OZW {
 
 	v8::Local<v8::Object> zwaveValue2v8Value(OpenZWave::ValueID value);
-	v8::Local<v8::Object> zwaveSceneValue2v8Value(uint8 sceneId, OpenZWave::ValueID value);
-
 	NodeInfo  *get_node_info(uint8 nodeid);
+	void       delete_node(uint8 nodeid);
+
+#ifdef OPENZWAVE_DEPRECATED16
+	v8::Local<v8::Object> zwaveSceneValue2v8Value(uint8 sceneId, OpenZWave::ValueID value);
 	SceneInfo *get_scene_info(uint8 sceneid);
+#endif
 
 	OpenZWave::ValueID* populateValueId(const Nan::FunctionCallbackInfo<v8::Value>& info, uint8 offset=0);
 	void populateNode(v8::Local<v8::Object>& nodeobj, uint32 homeid, uint8 nodeid);
 	const char* getControllerStateAsStr (OpenZWave::Driver::ControllerState _state);
 	const char* getControllerErrorAsStr(OpenZWave::Driver::ControllerError _err);
 
-	const std::string getNotifHelpMsg(OpenZWave::Notification const *n);
+	const ::std::string getNotifHelpMsg(OpenZWave::Notification const *n);
 
 	bool checkType(bool predicate);
 } // namespace OZW

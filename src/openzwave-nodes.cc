@@ -31,26 +31,28 @@ namespace OZW {
 		Nan::HandleScope scope;
 		uint8* neighbors;
 		CheckMinArgs(1, "nodeid");
-		uint8 nodeid = info[0]->Uint32Value();
-		uint8 numNeighbors = OpenZWave::Manager::Get()->GetNodeNeighbors(homeid, nodeid, &neighbors);
+		uint8 nodeid = Nan::To<Number>(info[0]).ToLocalChecked()->Value();
+		uint8 numNeighbors = -1;
+		OZWManagerAssign(numNeighbors, GetNodeNeighbors, homeid, nodeid, &neighbors);
 		Local<Array> o_neighbors = Nan::New<Array>(numNeighbors);
 		if (numNeighbors > 0) {
 			for (uint8 nr = 0; nr < numNeighbors; nr++) {
-				o_neighbors->Set(Nan::New<Integer>(nr), Nan::New<Integer>(neighbors[nr]));
+				Nan::Set(o_neighbors, nr, Nan::New<Integer>(neighbors[nr]));
 			}
 			delete neighbors;
 		}
 		info.GetReturnValue().Set( o_neighbors );
 	}
 
+#ifdef OPENZWAVE_DEPRECATED16
 	// =================================================================
 	NAN_METHOD(OZW::SetNodeOn)
 	// =================================================================
 	{
 		Nan::HandleScope scope;
 		CheckMinArgs(1, "nodeid");
-		uint8 nodeid = info[0]->Uint32Value();
-		OpenZWave::Manager::Get()->SetNodeOn(homeid, nodeid);
+		uint8 nodeid = Nan::To<Number>(info[0]).ToLocalChecked()->Value();
+		OZWManager( SetNodeOn, homeid, nodeid);
 	}
 
 	// =================================================================
@@ -59,8 +61,8 @@ namespace OZW {
 	{
 		Nan::HandleScope scope;
 		CheckMinArgs(1, "nodeid");
-		uint8 nodeid = info[0]->Uint32Value();
-		OpenZWave::Manager::Get()->SetNodeOff(homeid, nodeid);
+		uint8 nodeid = Nan::To<Number>(info[0]).ToLocalChecked()->Value();
+		OZWManager( SetNodeOff, homeid, nodeid);
 	}
 
 	// Generic dimmer control
@@ -72,8 +74,7 @@ namespace OZW {
 		CheckMinArgs(2, "nodeid, level");
 		uint8 nodeid = Nan::To<Integer>(info[0]).ToLocalChecked()->Value();
 		uint8 level  = Nan::To<Integer>(info[1]).ToLocalChecked()->Value();
-    printf("Setting home %x node %d level %d\n", homeid , nodeid, level);
-		OpenZWave::Manager::Get()->SetNodeLevel(homeid, nodeid, level);
+		OZWManager( SetNodeLevel, homeid, nodeid, level);
 	}
 
 	// ===================================================================
@@ -81,7 +82,7 @@ namespace OZW {
 	// ===================================================================
 	{
 		Nan::HandleScope scope;
-		OpenZWave::Manager::Get()->SwitchAllOn(homeid);
+		OZWManager( SwitchAllOn, homeid);
 	}
 
 	// ===================================================================
@@ -89,9 +90,33 @@ namespace OZW {
 	// ===================================================================
 	{
 		Nan::HandleScope scope;
-		OpenZWave::Manager::Get()->SwitchAllOff(homeid);
+		OZWManager( SwitchAllOff, homeid);
 	}
-
+#endif
+#ifdef OPENZWAVE_16
+	// ===================================================================
+	NAN_METHOD(OZW::SendRawData)
+	// ===================================================================
+	{
+		Nan::HandleScope scope;
+		CheckMinArgs(5, "nodeid, logText<str>, msgType<uint8>, sendSecure<bool>, content<Buffer> (,length)");
+		uint8 nodeid     = Nan::To<Number>(info[0]).ToLocalChecked()->Value();
+		::std::string logText(*Nan::Utf8String( info[1] ));
+		uint8 msgType    = Nan::To<Number>(info[2]).ToLocalChecked()->Value();
+		bool sendSecure  = Nan::To<Boolean>(info[3]).ToLocalChecked()->Value();
+		checkType(Buffer::HasInstance(info[4]));
+		uint8 *content   = (uint8*)Buffer::Data(info[4]);
+		double buflength =  Buffer::Length(info[4]);
+		uint8 length    = 0;
+		// can either deduce length from JS buffer, or use the length provided
+		if (info.Length() > 5) {
+			length = ::std::min<double>( Nan::To<Number>(info[5]).ToLocalChecked()->Value(), buflength );
+		} else {
+			length = buflength;
+		}
+		OZWManager( SendRawData, homeid, nodeid, logText, msgType, sendSecure, content, length );
+	}
+#endif
 	// ===================================================================
 	NAN_METHOD(OZW::PressButton)
 	// ===================================================================
@@ -99,7 +124,7 @@ namespace OZW {
 		Nan::HandleScope scope;
 		OpenZWave::ValueID* ozwvid = populateValueId(info);
 		if (ozwvid) {
-			OpenZWave::Manager::Get()->PressButton(*ozwvid);
+			OZWManager( PressButton, *ozwvid);
 		}
 	}
 
@@ -110,7 +135,7 @@ namespace OZW {
 		Nan::HandleScope scope;
 		OpenZWave::ValueID* ozwvid = populateValueId(info);
 		if (ozwvid) {
-			OpenZWave::Manager::Get()->ReleaseButton(*ozwvid);
+			OZWManager( ReleaseButton, *ozwvid);
 		}
 	}
 	/*
@@ -122,9 +147,9 @@ namespace OZW {
 	{
 		Nan::HandleScope scope;
 		CheckMinArgs(2, "nodeid, location");
-		uint8 nodeid = info[0]->Uint32Value();
-		std::string location(*Nan::Utf8String( info[1] ));
-		OpenZWave::Manager::Get()->SetNodeLocation(homeid, nodeid, location);
+		uint8 nodeid = Nan::To<Number>(info[0]).ToLocalChecked()->Value();
+		::std::string location(*Nan::Utf8String( info[1] ));
+		OZWManager( SetNodeLocation, homeid, nodeid, location);
 	}
 
 	/*
@@ -136,9 +161,9 @@ namespace OZW {
 	{
 		Nan::HandleScope scope;
 		CheckMinArgs(2, "nodeid, name");
-		uint8 nodeid = info[0]->Uint32Value();
-		std::string name(*Nan::Utf8String( info[1] ));
-		OpenZWave::Manager::Get()->SetNodeName(homeid, nodeid, name);
+		uint8 nodeid = Nan::To<Number>(info[0]).ToLocalChecked()->Value();
+		::std::string name(*Nan::Utf8String( info[1] ));
+		OZWManager( SetNodeName, homeid, nodeid, name);
 	}
 
 	/*
@@ -157,8 +182,8 @@ namespace OZW {
 	{
 		Nan::HandleScope scope;
 		CheckMinArgs(1, "nodeid");
-		uint8 nodeid = info[0]->Uint32Value();
-		OpenZWave::Manager::Get()->RefreshNodeInfo(homeid, nodeid);
+		uint8 nodeid = Nan::To<Number>(info[0]).ToLocalChecked()->Value();
+		OZWManager( RefreshNodeInfo, homeid, nodeid);
 	}
 
 	/*
@@ -170,8 +195,9 @@ namespace OZW {
 	{
 		Nan::HandleScope scope;
 		CheckMinArgs(1, "nodeid");
-		uint8 nodeid = info[0]->Uint32Value();
-		std::string result = OpenZWave::Manager::Get()->GetNodeManufacturerName(homeid, nodeid);
+		uint8 nodeid = Nan::To<Number>(info[0]).ToLocalChecked()->Value();
+		::std::string result("");
+		OZWManagerAssign(result,  GetNodeManufacturerName, homeid, nodeid);
 		info.GetReturnValue().Set(Nan::New<String>(result.c_str()).ToLocalChecked());
 	}
 
@@ -184,8 +210,9 @@ namespace OZW {
 	{
 		Nan::HandleScope scope;
 		CheckMinArgs(1, "nodeid");
-		uint8 nodeid = info[0]->Uint32Value();
-		bool result = OpenZWave::Manager::Get()->RequestNodeState(homeid, nodeid);
+		uint8 nodeid = Nan::To<Number>(info[0]).ToLocalChecked()->Value();
+		bool result = false;
+		OZWManagerAssign(result,  RequestNodeState, homeid, nodeid);
 		info.GetReturnValue().Set(Nan::New<Boolean>(result));
 	}
 
@@ -198,8 +225,9 @@ namespace OZW {
 	{
 		Nan::HandleScope scope;
 		CheckMinArgs(1, "nodeid");
-		uint8 nodeid = info[0]->Uint32Value();
-		bool result = OpenZWave::Manager::Get()->RequestNodeDynamic(homeid, nodeid);
+		uint8 nodeid = Nan::To<Number>(info[0]).ToLocalChecked()->Value();
+		bool result = false;
+		OZWManagerAssign(result,  RequestNodeDynamic, homeid, nodeid);
 		info.GetReturnValue().Set(Nan::New<Boolean>(result));
 	}
 
@@ -212,8 +240,9 @@ namespace OZW {
 	{
 		Nan::HandleScope scope;
 		CheckMinArgs(1, "nodeid");
-		uint8 nodeid = info[0]->Uint32Value();
-		bool result = OpenZWave::Manager::Get()->IsNodeListeningDevice(homeid, nodeid);
+		uint8 nodeid = Nan::To<Number>(info[0]).ToLocalChecked()->Value();
+		bool result = false;
+		OZWManagerAssign(result,  IsNodeListeningDevice, homeid, nodeid);
 		info.GetReturnValue().Set(Nan::New<Boolean>(result));
 	}
 
@@ -226,8 +255,9 @@ namespace OZW {
 	{
 		Nan::HandleScope scope;
 		CheckMinArgs(1, "nodeid");
-		uint8 nodeid = info[0]->Uint32Value();
-		bool result = OpenZWave::Manager::Get()->IsNodeFrequentListeningDevice(homeid, nodeid);
+		uint8 nodeid = Nan::To<Number>(info[0]).ToLocalChecked()->Value();
+		bool result = false;
+		OZWManagerAssign(result,  IsNodeFrequentListeningDevice, homeid, nodeid);
 		info.GetReturnValue().Set(Nan::New<Boolean>(result));
 	}
 
@@ -240,8 +270,9 @@ namespace OZW {
 	{
 		Nan::HandleScope scope;
 		CheckMinArgs(1, "nodeid");
-		uint8 nodeid = info[0]->Uint32Value();
-		bool result = OpenZWave::Manager::Get()->IsNodeBeamingDevice(homeid, nodeid);
+		uint8 nodeid = Nan::To<Number>(info[0]).ToLocalChecked()->Value();
+		bool result = false;
+		OZWManagerAssign(result,  IsNodeBeamingDevice, homeid, nodeid);
 		info.GetReturnValue().Set(Nan::New<Boolean>(result));
 	}
 
@@ -254,8 +285,9 @@ namespace OZW {
 	{
 		Nan::HandleScope scope;
 		CheckMinArgs(1, "nodeid");
-		uint8 nodeid = info[0]->Uint32Value();
-		bool result = OpenZWave::Manager::Get()->IsNodeRoutingDevice(homeid, nodeid);
+		uint8 nodeid = Nan::To<Number>(info[0]).ToLocalChecked()->Value();
+		bool result = false;
+		OZWManagerAssign(result,  IsNodeRoutingDevice, homeid, nodeid);
 		info.GetReturnValue().Set(Nan::New<Boolean>(result));
 	}
 
@@ -268,11 +300,131 @@ namespace OZW {
 	{
 		Nan::HandleScope scope;
 		CheckMinArgs(1, "nodeid");
-		uint8 nodeid = info[0]->Uint32Value();
-		bool result = OpenZWave::Manager::Get()->IsNodeSecurityDevice(homeid, nodeid);
+		uint8 nodeid = Nan::To<Number>(info[0]).ToLocalChecked()->Value();
+		bool result = false;
+		OZWManagerAssign(result,  IsNodeSecurityDevice, homeid, nodeid);
 		info.GetReturnValue().Set(Nan::New<Boolean>(result));
 	}
-
+	
+	// ===================================================================
+	NAN_METHOD(OZW::GetNodePlusTypeString)
+	// ===================================================================
+	{
+		Nan::HandleScope scope;
+		CheckMinArgs(1, "nodeid");
+		uint8  nodeid = Nan::To<Number>(info[0]).ToLocalChecked()->Value();		
+		::std::string result = OpenZWave::Manager::Get()->GetNodePlusTypeString(homeid, nodeid);
+		info.GetReturnValue().Set(Nan::New<String>(result.c_str()).ToLocalChecked());
+	}
+	/*
+	 *
+	 */// ===================================================================
+	NAN_METHOD(OZW::GetNodeRoleString)
+	// ===================================================================
+	{
+		Nan::HandleScope scope;
+		CheckMinArgs(1, "nodeid");
+		uint8  nodeid = Nan::To<Number>(info[0]).ToLocalChecked()->Value();		
+		::std::string result = OpenZWave::Manager::Get()->GetNodeRoleString(homeid, nodeid);
+		info.GetReturnValue().Set(Nan::New<String>(result.c_str()).ToLocalChecked());
+	}
+	/*
+	 *
+	 */// ===================================================================
+	NAN_METHOD(OZW::GetNodePlusType)
+	// ===================================================================
+	{
+		Nan::HandleScope scope;
+		CheckMinArgs(1, "nodeid");
+		uint8  nodeid = Nan::To<Number>(info[0]).ToLocalChecked()->Value();		
+		uint8 result = OpenZWave::Manager::Get()->GetNodePlusType(homeid, nodeid);
+		info.GetReturnValue().Set(Nan::New<Integer>(result));
+	}
+	/*
+	 *
+	 */// ===================================================================
+	NAN_METHOD(OZW::GetNodeRole)
+	// ===================================================================
+	{
+		Nan::HandleScope scope;
+		CheckMinArgs(1, "nodeid");
+		uint8  nodeid = Nan::To<Number>(info[0]).ToLocalChecked()->Value();		
+		uint8 result = OpenZWave::Manager::Get()->GetNodeRole(homeid, nodeid);
+		info.GetReturnValue().Set(Nan::New<Integer>(result));
+	}
+	/*
+	 *
+	 */// ===================================================================
+	NAN_METHOD(OZW::GetNodeDeviceTypeString)
+	// ===================================================================
+	{
+		Nan::HandleScope scope;
+		CheckMinArgs(1, "nodeid");
+		uint8  nodeid = Nan::To<Number>(info[0]).ToLocalChecked()->Value();		
+		::std::string result = OpenZWave::Manager::Get()->GetNodeDeviceTypeString(homeid, nodeid);
+		info.GetReturnValue().Set(Nan::New<String>(result.c_str()).ToLocalChecked());
+	}
+	/*
+	 *
+	 */// ===================================================================
+	NAN_METHOD(OZW::GetNodeDeviceType)
+	// ===================================================================
+	{
+		Nan::HandleScope scope;
+		CheckMinArgs(1, "nodeid");
+		uint8  nodeid = Nan::To<Number>(info[0]).ToLocalChecked()->Value();		
+		uint16 result = OpenZWave::Manager::Get()->GetNodeDeviceType(homeid, nodeid);
+		info.GetReturnValue().Set(Nan::New<Integer>(result));
+	}
+	/*
+	 *
+	 */// ===================================================================
+	NAN_METHOD(OZW::IsNodeFailed)
+	// ===================================================================
+	{
+		Nan::HandleScope scope;
+		CheckMinArgs(1, "nodeid");
+		uint8  nodeid = Nan::To<Number>(info[0]).ToLocalChecked()->Value();
+		bool result = OpenZWave::Manager::Get()->IsNodeFailed(homeid, nodeid);
+		info.GetReturnValue().Set(Nan::New<Boolean>(result));
+	}
+	/*
+	 *
+	 */// ===================================================================
+	NAN_METHOD(OZW::IsNodeAwake)
+	// ===================================================================
+	{
+		Nan::HandleScope scope;
+		CheckMinArgs(1, "nodeid");
+		uint8  nodeid = Nan::To<Number>(info[0]).ToLocalChecked()->Value();
+		bool result = OpenZWave::Manager::Get()->IsNodeAwake(homeid, nodeid);
+		info.GetReturnValue().Set(Nan::New<Boolean>(result));
+	}
+	/*
+	 *
+	 */// ===================================================================
+	NAN_METHOD(OZW::IsNodeInfoReceived)
+	// ===================================================================
+	{
+		Nan::HandleScope scope;
+		CheckMinArgs(1, "nodeid");
+		uint8  nodeid = Nan::To<Number>(info[0]).ToLocalChecked()->Value();
+		bool result = OpenZWave::Manager::Get()->IsNodeInfoReceived(homeid, nodeid);
+		info.GetReturnValue().Set(Nan::New<Boolean>(result));
+	}
+	/*
+	 *
+	 */
+	// ===================================================================
+	NAN_METHOD(OZW::GetNodeQueryStage)
+	// ===================================================================
+	{
+		Nan::HandleScope scope;
+		CheckMinArgs(1, "nodeid");
+		uint8  nodeid = Nan::To<Number>(info[0]).ToLocalChecked()->Value();
+		::std::string result = OpenZWave::Manager::Get()->GetNodeQueryStage(homeid, nodeid);
+		info.GetReturnValue().Set(Nan::New<String>(result.c_str()).ToLocalChecked());
+	}
 	/*
 	 *
 	 */
@@ -282,8 +434,9 @@ namespace OZW {
 	{
 		Nan::HandleScope scope;
 		CheckMinArgs(1, "nodeid");
-		uint8  nodeid = info[0]->Uint32Value();
-		uint32 result = OpenZWave::Manager::Get()->GetNodeMaxBaudRate(homeid, nodeid);
+		uint8 nodeid = Nan::To<Number>(info[0]).ToLocalChecked()->Value();
+		uint32 result = -1;
+		OZWManagerAssign(result,  GetNodeMaxBaudRate, homeid, nodeid);
 		info.GetReturnValue().Set(Nan::New<Uint32>(result));
 	}
 
@@ -296,8 +449,9 @@ namespace OZW {
 	{
 		Nan::HandleScope scope;
 		CheckMinArgs(1, "nodeid");
-		uint8 nodeid = info[0]->Uint32Value();
-		uint8 result = OpenZWave::Manager::Get()->GetNodeVersion(homeid, nodeid);
+		uint8 nodeid = Nan::To<Number>(info[0]).ToLocalChecked()->Value();
+		uint8 result = -1;
+		OZWManagerAssign(result,  GetNodeVersion, homeid, nodeid);
 		info.GetReturnValue().Set(Nan::New<Integer>(result));
 	}
 
@@ -310,8 +464,9 @@ namespace OZW {
 	{
 		Nan::HandleScope scope;
 		CheckMinArgs(1, "nodeid");
-		uint8 nodeid = info[0]->Uint32Value();
-		uint8 result = OpenZWave::Manager::Get()->GetNodeSecurity(homeid, nodeid);
+		uint8 nodeid = Nan::To<Number>(info[0]).ToLocalChecked()->Value();
+		uint8 result = -1;
+		OZWManagerAssign(result,  GetNodeSecurity, homeid, nodeid);
 		info.GetReturnValue().Set(Nan::New<Integer>(result));
 	}
 
@@ -324,8 +479,9 @@ namespace OZW {
 	{
 		Nan::HandleScope scope;
 		CheckMinArgs(1, "nodeid");
-		uint8 nodeid = info[0]->Uint32Value();
-		uint8 result = OpenZWave::Manager::Get()->GetNodeBasic(homeid, nodeid);
+		uint8 nodeid = Nan::To<Number>(info[0]).ToLocalChecked()->Value();
+		uint8 result = -1;
+		OZWManagerAssign(result,  GetNodeBasic, homeid, nodeid);
 		info.GetReturnValue().Set(Nan::New<Integer>(result));
 	}
 
@@ -338,8 +494,9 @@ namespace OZW {
 	{
 		Nan::HandleScope scope;
 		CheckMinArgs(1, "nodeid");
-		uint8 nodeid = info[0]->Uint32Value();
-		uint8 result = OpenZWave::Manager::Get()->GetNodeGeneric(homeid, nodeid);
+		uint8 nodeid = Nan::To<Number>(info[0]).ToLocalChecked()->Value();
+		uint8 result = -1;
+		OZWManagerAssign(result,  GetNodeGeneric, homeid, nodeid);
 		info.GetReturnValue().Set(Nan::New<Integer>(result));
 	}
 
@@ -352,8 +509,9 @@ namespace OZW {
 	{
 		Nan::HandleScope scope;
 		CheckMinArgs(1, "nodeid");
-		uint8 nodeid = info[0]->Uint32Value();
-		uint8 result = OpenZWave::Manager::Get()->GetNodeSpecific(homeid, nodeid);
+		uint8 nodeid = Nan::To<Number>(info[0]).ToLocalChecked()->Value();
+		uint8 result = -1;
+		OZWManagerAssign(result, GetNodeSpecific, homeid, nodeid);
 		info.GetReturnValue().Set(Nan::New<Integer>(result));
 	}
 
@@ -366,8 +524,9 @@ namespace OZW {
 	{
 		Nan::HandleScope scope;
 		CheckMinArgs(1, "nodeid");
-		uint8 nodeid = info[0]->Uint32Value();
-		std::string result = OpenZWave::Manager::Get()->GetNodeType(homeid, nodeid);
+		uint8 nodeid = Nan::To<Number>(info[0]).ToLocalChecked()->Value();
+		::std::string result("");
+		OZWManagerAssign(result,  GetNodeType, homeid, nodeid);
 		info.GetReturnValue().Set(Nan::New<String>(result.c_str()).ToLocalChecked());
 	}
 
@@ -380,8 +539,9 @@ namespace OZW {
 	{
 		Nan::HandleScope scope;
 		CheckMinArgs(1, "nodeid");
-		uint8 nodeid = info[0]->Uint32Value();
-		std::string result = OpenZWave::Manager::Get()->GetNodeProductName(homeid, nodeid);
+		uint8 nodeid = Nan::To<Number>(info[0]).ToLocalChecked()->Value();
+		::std::string result("");
+		OZWManagerAssign(result, GetNodeProductName, homeid, nodeid);
 		info.GetReturnValue().Set(Nan::New<String>(result.c_str()).ToLocalChecked());
 	}
 
@@ -394,8 +554,9 @@ namespace OZW {
 	{
 		Nan::HandleScope scope;
 		CheckMinArgs(1, "nodeid");
-		uint8 nodeid = info[0]->Uint32Value();
-		std::string result = OpenZWave::Manager::Get()->GetNodeName(homeid, nodeid);
+		uint8 nodeid = Nan::To<Number>(info[0]).ToLocalChecked()->Value();
+		::std::string result("");
+		OZWManagerAssign(result, GetNodeName, homeid, nodeid);
 		info.GetReturnValue().Set(Nan::New<String>(result.c_str()).ToLocalChecked());
 	}
 
@@ -408,8 +569,9 @@ namespace OZW {
 	{
 		Nan::HandleScope scope;
 		CheckMinArgs(1, "nodeid");
-		uint8 nodeid = info[0]->Uint32Value();
-		std::string result = OpenZWave::Manager::Get()->GetNodeLocation(homeid, nodeid);
+		uint8 nodeid = Nan::To<Number>(info[0]).ToLocalChecked()->Value();
+		::std::string result("");
+		OZWManagerAssign(result, GetNodeLocation, homeid, nodeid);
 		info.GetReturnValue().Set(Nan::New<String>(result.c_str()).ToLocalChecked());
 	}
 
@@ -422,8 +584,9 @@ namespace OZW {
 	{
 		Nan::HandleScope scope;
 		CheckMinArgs(1, "nodeid");
-		uint8 nodeid = info[0]->Uint32Value();
-		std::string result = OpenZWave::Manager::Get()->GetNodeManufacturerId(homeid, nodeid);
+		uint8 nodeid = Nan::To<Number>(info[0]).ToLocalChecked()->Value();
+		::std::string result("");
+		OZWManagerAssign(result, GetNodeManufacturerId, homeid, nodeid);
 		info.GetReturnValue().Set(Nan::New<String>(result.c_str()).ToLocalChecked());
 	}
 
@@ -436,8 +599,9 @@ namespace OZW {
 	{
 		Nan::HandleScope scope;
 		CheckMinArgs(1, "nodeid");
-		uint8 nodeid = info[0]->Uint32Value();
-		std::string result = OpenZWave::Manager::Get()->GetNodeProductType(homeid, nodeid);
+		uint8 nodeid = Nan::To<Number>(info[0]).ToLocalChecked()->Value();
+		::std::string result("");
+		OZWManagerAssign(result, GetNodeProductType, homeid, nodeid);
 		info.GetReturnValue().Set(Nan::New<String>(result.c_str()).ToLocalChecked());
 	}
 
@@ -450,8 +614,9 @@ namespace OZW {
 	{
 		Nan::HandleScope scope;
 		CheckMinArgs(1, "nodeid");
-		uint8 nodeid = info[0]->Uint32Value();
-		std::string result = OpenZWave::Manager::Get()->GetNodeProductId(homeid, nodeid);
+		uint8 nodeid = Nan::To<Number>(info[0]).ToLocalChecked()->Value();
+		::std::string result("");
+		OZWManagerAssign(result, GetNodeProductId, homeid, nodeid);
 		info.GetReturnValue().Set(Nan::New<String>(result.c_str()).ToLocalChecked());
 	}
 
@@ -464,9 +629,9 @@ namespace OZW {
 	{
 		Nan::HandleScope scope;
 		CheckMinArgs(1, "nodeid");
-		uint8 nodeid = info[0]->Uint32Value();
-		std::string name(*Nan::Utf8String( info[1] ));
-		OpenZWave::Manager::Get()->SetNodeManufacturerName(homeid, nodeid, name);
+		uint8 nodeid = Nan::To<Number>(info[0]).ToLocalChecked()->Value();
+		::std::string name(*Nan::Utf8String( info[1] ));
+		OZWManager( SetNodeManufacturerName, homeid, nodeid, name);
 	}
 
 	/*
@@ -478,9 +643,9 @@ namespace OZW {
 	{
 		Nan::HandleScope scope;
 		CheckMinArgs(1, "nodeid");
-		uint8 nodeid = info[0]->Uint32Value();
-		std::string name(*Nan::Utf8String( info[1] ));
-		OpenZWave::Manager::Get()->SetNodeProductName(homeid, nodeid, name);
+		uint8 nodeid = Nan::To<Number>(info[0]).ToLocalChecked()->Value();
+		::std::string name(*Nan::Utf8String( info[1] ));
+		OZWManager( SetNodeProductName, homeid, nodeid, name);
 	}
 
 }

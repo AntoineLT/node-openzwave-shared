@@ -33,8 +33,9 @@ namespace OZW {
 	{
 		Nan::HandleScope scope;
 		CheckMinArgs(1, "nodeid");
-		uint8 nodeid = info[0]->Uint32Value();
-		uint8 numGroups = OpenZWave::Manager::Get()->GetNumGroups(homeid, nodeid);
+		uint8 nodeid = Nan::To<Number>(info[0]).ToLocalChecked()->Value();
+		uint8 numGroups = 0;
+		OZWManagerAssign(numGroups, GetNumGroups, homeid, nodeid);
 		info.GetReturnValue().Set(Nan::New<Integer>(numGroups));
 	}
 
@@ -48,17 +49,18 @@ namespace OZW {
 		Nan::HandleScope scope;
 		CheckMinArgs(2, "nodeid, groupidx");
 		uint8* associations;
-		uint8 nodeid = info[0]->Uint32Value();
-		uint8 groupidx = info[1]->Uint32Value();
+		uint8 nodeid   = Nan::To<Number>(info[0]).ToLocalChecked()->Value();
+		uint8 groupidx = Nan::To<Number>(info[1]).ToLocalChecked()->Value();
 
-		uint32 numNodes = OpenZWave::Manager::Get()->GetAssociations(
+		uint32 numNodes = 0;
+		OZWManagerAssign(numNodes, GetAssociations,
 			homeid, nodeid,	groupidx, &associations
 		);
 
 		Local<Array> o_assocs = Nan::New<Array>(numNodes);
 
 		for (uint8 nr = 0; nr < numNodes; nr++) {
-			o_assocs->Set(Nan::New<Integer>(nr), Nan::New<Integer>(associations[nr]));
+			Nan::Set(o_assocs, nr, Nan::New<Integer>(associations[nr]));
 		}
 		if (numNodes > 0) {
 			// The caller is responsible for freeing the array memory with a call to delete [].
@@ -77,10 +79,11 @@ namespace OZW {
 	{
 		Nan::HandleScope scope;
 		CheckMinArgs(2, "nodeid, groupidx");
-		uint8 nodeid = info[0]->Uint32Value();
-		uint8 groupidx = info[1]->Uint32Value();
+		uint8 nodeid   = Nan::To<Number>(info[0]).ToLocalChecked()->Value();
+		uint8 groupidx = Nan::To<Number>(info[1]).ToLocalChecked()->Value();
 
-		uint8 numMaxAssoc = OpenZWave::Manager::Get()->GetMaxAssociations(
+		uint8 numMaxAssoc = 0;
+		OZWManagerAssign(numMaxAssoc, GetMaxAssociations,
 			homeid, nodeid,	groupidx
 		);
 
@@ -96,10 +99,11 @@ namespace OZW {
 	{
 		Nan::HandleScope scope;
 		CheckMinArgs(2, "nodeid, groupidx");
-		uint8 nodeid = info[0]->Uint32Value();
-		uint8 groupidx = info[1]->Uint32Value();
+		uint8 nodeid   = Nan::To<Number>(info[0]).ToLocalChecked()->Value();
+		uint8 groupidx = Nan::To<Number>(info[1]).ToLocalChecked()->Value();
 
-		std::string groupLabel = OpenZWave::Manager::Get()->GetGroupLabel(
+		::std::string groupLabel("");
+		OZWManagerAssign(groupLabel, GetGroupLabel,
 			homeid, nodeid, groupidx
 		);
 
@@ -118,12 +122,16 @@ namespace OZW {
 	{
 		Nan::HandleScope scope;
 		CheckMinArgs(3, "nodeid, groupidx, tgtnodeid");
-		uint8 nodeid = info[0]->Uint32Value();
-		uint8 groupidx = info[1]->Uint32Value();
-		uint8 tgtnodeid = info[2]->Uint32Value();
+		uint8 nodeid = Nan::To<Number>(info[0]).ToLocalChecked()->Value();
+		uint8 groupidx = Nan::To<Number>(info[1]).ToLocalChecked()->Value();
+		uint8 tgtnodeid = Nan::To<Number>(info[2]).ToLocalChecked()->Value();
+		uint8 instanceid = 0;
+		if(info.Length() > 3) {
+			instanceid = Nan::To<Number>(info[3]).ToLocalChecked()->Value();
+		}
 
-		OpenZWave::Manager::Get()->AddAssociation(
-			homeid,nodeid,groupidx,tgtnodeid
+		OZWManager( AddAssociation,
+			homeid, nodeid, groupidx, tgtnodeid, instanceid
 		);
 	}
 
@@ -136,11 +144,37 @@ namespace OZW {
 	{
 		Nan::HandleScope scope;
 		CheckMinArgs(3, "nodeid, groupidx, tgtnodeid");
-		uint8 nodeid = info[0]->Uint32Value();
-		uint8 groupidx = info[1]->Uint32Value();
-		uint8 tgtnodeid = info[2]->Uint32Value();
+		uint8 nodeid = Nan::To<Number>(info[0]).ToLocalChecked()->Value();
+		uint8 groupidx = Nan::To<Number>(info[1]).ToLocalChecked()->Value();
+		uint8 tgtnodeid = Nan::To<Number>(info[2]).ToLocalChecked()->Value();
+		uint8 instanceid = 0;
+		if(info.Length() > 3) {
+			instanceid = Nan::To<Number>(info[3]).ToLocalChecked()->Value();
+		}
 
-		OpenZWave::Manager::Get()->RemoveAssociation(homeid,nodeid,groupidx,tgtnodeid);
+		OZWManager( RemoveAssociation,
+			homeid, nodeid, groupidx, tgtnodeid, instanceid
+		);
 	}
+
+#ifdef OPENZWAVE_16
+	/*
+	 *
+	 */
+	// ===================================================================
+	NAN_METHOD(OZW::IsMultiInstance)
+	// ===================================================================
+	{
+		Nan::HandleScope scope;
+		bool isMultiInstance = false;
+
+		CheckMinArgs(2, "nodeid, groupidx");
+		uint8 nodeid = Nan::To<Number>(info[0]).ToLocalChecked()->Value();
+		uint8 groupidx = Nan::To<Number>(info[1]).ToLocalChecked()->Value();
+
+		OZWManagerAssign(isMultiInstance, IsMultiInstance, homeid, nodeid, groupidx);
+		info.GetReturnValue().Set(Nan::New<Boolean>(isMultiInstance));
+	}
+#endif
 
 }

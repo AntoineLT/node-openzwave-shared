@@ -43,8 +43,18 @@ namespace OZW {
 		return NULL;
 	}
 
+	/*
+	* Delete NodeInfo after a NodeReset or NodeRemoved notification
+	*/
+	void delete_node(uint8 nodeid) {
+		mutex::scoped_lock sl(znodes_mutex);
+		if (znodes.erase(nodeid)) {
+			// TODO: extra cleanup??
+		}
+	}
+
 	SceneInfo *get_scene_info(uint8 sceneid) {
-		std::list<SceneInfo *>::iterator it;
+		::std::list<SceneInfo *>::iterator it;
 
 		SceneInfo *scene;
 
@@ -57,15 +67,15 @@ namespace OZW {
 		return NULL;
 	}
 
-	std::string getValueIdDescriptor(OpenZWave::ValueID value) {
+	::std::string getValueIdDescriptor(OpenZWave::ValueID value) {
 		char buffer[32];
-		sprintf(buffer, "%d-%d-%d-%d", value.GetNodeId(), value.GetCommandClassId(), value.GetInstance(), value.GetIndex());
-		return std::string(buffer);
+		snprintf(buffer, 32, "%d-%d-%d-%d", value.GetNodeId(), value.GetCommandClassId(), value.GetInstance(), value.GetIndex());
+		return ::std::string(buffer);
 	}
-	std::string getValueIdDescriptor(uint8 node_id, uint8 class_id, uint8 instance, uint8 index) {
+	::std::string getValueIdDescriptor(uint8 node_id, uint8 class_id, OZWValueIdIndex instance, uint8 index) {
 		char buffer[32];
-		sprintf(buffer, "%d-%d-%d-%d", node_id, class_id, instance, index);
-		return std::string(buffer);
+		snprintf(buffer, 32, "%d-%d-%d-%d", node_id, class_id, instance, index);
+		return ::std::string(buffer);
 	}
 
 	// populate a v8 object with an attribute called 'value' whose value is the
@@ -77,51 +87,65 @@ namespace OZW {
 		switch (value.GetType()) {
 			case OpenZWave::ValueID::ValueType_Bool: {
 				bool val;
-				OpenZWave::Manager::Get()->GetValueAsBool(value, &val);
+				OZWManager( GetValueAsBool, value, &val);
 				AddBooleanProp(valobj, value, val);
 				break;
 			}
 			case OpenZWave::ValueID::ValueType_Byte: {
 				uint8 val;
-				OpenZWave::Manager::Get()->GetValueAsByte(value, &val);
+				OZWManager( GetValueAsByte, value, &val);
 				AddIntegerProp(valobj, value, val);
 				break;
 			}
 			case OpenZWave::ValueID::ValueType_Decimal: {
-				std::string val;
-				OpenZWave::Manager::Get()->GetValueAsString(value, &val);
+				::std::string val;
+				OZWManager( GetValueAsString, value, &val);
 				AddStringProp(valobj, value, val);
 				break;
 			}
 			case OpenZWave::ValueID::ValueType_Int: {
 				int32 val;
-				OpenZWave::Manager::Get()->GetValueAsInt(value, &val);
+				OZWManager( GetValueAsInt, value, &val);
 				AddIntegerProp(valobj, value, val);
 				break;
 			}
 			case OpenZWave::ValueID::ValueType_List: {
-				std::string val;
-				std::vector < std::string > items;
+ 				::std::string val;
+				::std::vector < ::std::string > items;
 				// populate array of all available items in the list
-				OpenZWave::Manager::Get()->GetValueListItems(value, &items);
+				OZWManager( GetValueListItems, value, &items);
 				AddArrayOfStringProp(valobj, values, items);
 				// populated selected element
-				OpenZWave::Manager::Get()->GetValueListSelection(value, &val);
+				OZWManager( GetValueListSelection, value, &val);
 				AddStringProp(valobj, value, val.c_str())
-				break;
+ 				break;
 			}
 			case OpenZWave::ValueID::ValueType_Short: {
 				int16 val;
-				OpenZWave::Manager::Get()->GetValueAsShort(value, &val);
+				OZWManager( GetValueAsShort, value, &val);
 				AddIntegerProp(valobj, value, val);
 				break;
 			}
 			case OpenZWave::ValueID::ValueType_String: {
-				std::string val;
-				OpenZWave::Manager::Get()->GetValueAsString(value, &val);
+				::std::string val;
+				OZWManager( GetValueAsString, value, &val);
 				AddStringProp(valobj, value, val.c_str())
 				break;
 			}
+#if OPENZWAVE_16
+#define SET(val,offset)   val |=  (1 << offset)
+#define CLEAR(val,offset) val &= ~(1 << offset)
+			// just return the whole bitset, mask your bit in JS land
+			case OpenZWave::ValueID::ValueType_BitSet: {
+				uint8 val = 0;
+				bool bit;
+				for (uint8 pos = 0; pos < 8; pos++) {
+					OZWManager( GetValueAsBitSet, value, pos, &bit);
+					bit ? SET(val, pos) : CLEAR(val, pos);
+				}
+				AddIntegerProp(valobj, value, val);
+			}
+#endif
 			/*
 			* Buttons do not have a value.
 			*/
@@ -133,7 +157,7 @@ namespace OZW {
 			}
 			case OpenZWave::ValueID::ValueType_Raw: {
 				uint8 *val, len;
-				OpenZWave::Manager::Get()->GetValueAsRaw(value, &val, &len);
+				OZWManager( GetValueAsRaw, value, &val, &len);
 				Nan::Set(valobj,
 					Nan::New<String>("value").ToLocalChecked(),
 					Nan::CopyBuffer((char *)val, len).ToLocalChecked()
@@ -148,6 +172,7 @@ namespace OZW {
 		}
 	}
 
+#if OPENZWAVE_SCENES
 	// populate a v8 object with an attribute called 'value' whose value is the
 	// SCENE value (not the current one!) - as returned from its proper typed call
 	// (using Manager::SceneGetValueAsXXX calls)
@@ -158,37 +183,48 @@ namespace OZW {
 		switch (value.GetType()) {
 			case OpenZWave::ValueID::ValueType_Bool: {
 				bool val;
-				OpenZWave::Manager::Get()->SceneGetValueAsBool(sceneid, value, &val);
+				OZWManager( SceneGetValueAsBool, sceneid, value, &val);
 				AddBooleanProp(valobj, value, val);
 				break;
 			}
 			case OpenZWave::ValueID::ValueType_Byte: {
 				uint8 val;
-				OpenZWave::Manager::Get()->SceneGetValueAsByte(sceneid, value, &val);
+				OZWManager( SceneGetValueAsByte, sceneid, value, &val);
 				AddIntegerProp(valobj, value, val);
 				break;
 			}
 			case OpenZWave::ValueID::ValueType_Decimal: {
-				std::string val;
-				OpenZWave::Manager::Get()->SceneGetValueAsString(sceneid, value, &val);
+				::std::string val;
+				OZWManager( SceneGetValueAsString, sceneid, value, &val);
 				AddStringProp(valobj, value, val);
+				break;
+			}
+			case OpenZWave::ValueID::ValueType_List: {
+				::std::string val;
+				::std::vector < ::std::string > items;
+				// populate array of all available items in the list
+				OZWManager( GetValueListItems, value, &items);
+				AddArrayOfStringProp(valobj, values, items);
+				// populated selected element
+				OZWManager( SceneGetValueAsString, sceneid, value, &val);
+				AddStringProp(valobj, value, val.c_str())
 				break;
 			}
 			case OpenZWave::ValueID::ValueType_Int: {
 				int32 val;
-				OpenZWave::Manager::Get()->SceneGetValueAsInt(sceneid, value, &val);
+				OZWManager( SceneGetValueAsInt, sceneid, value, &val);
 				AddIntegerProp(valobj, value, val);
 				break;
 			}
 			case OpenZWave::ValueID::ValueType_Short: {
 				int16 val;
-				OpenZWave::Manager::Get()->SceneGetValueAsShort(sceneid, value, &val);
+				OZWManager( SceneGetValueAsShort, sceneid, value, &val);
 				AddIntegerProp(valobj, value, val);
 				break;
 			}
 			case OpenZWave::ValueID::ValueType_String: {
-				std::string val;
-				OpenZWave::Manager::Get()->SceneGetValueAsString(sceneid, value, &val);
+				::std::string val;
+				OZWManager( SceneGetValueAsString, sceneid, value, &val);
 				AddStringProp(valobj, value, val.c_str())
 				break;
 			}
@@ -197,13 +233,13 @@ namespace OZW {
 			*/
 			case OpenZWave::ValueID::ValueType_Button:
 			case OpenZWave::ValueID::ValueType_Schedule:
-			case OpenZWave::ValueID::ValueType_List:
 			case OpenZWave::ValueID::ValueType_Raw: {
 				fprintf(stderr, "unsupported scene value type: 0x%x\n", value.GetType());
 				break;
 			}
 		}
 	}
+#endif
 
 	// populate a v8 Object with useful information about a ZWave node
 	void populateNode(
@@ -224,7 +260,7 @@ namespace OZW {
 	void populateValueId(v8::Local<v8::Object>& nodeobj, OpenZWave::ValueID value) {
 		Nan::EscapableHandleScope handle_scope;
 		OpenZWave::Manager *mgr = OpenZWave::Manager::Get();
-		std::string buffer = getValueIdDescriptor(value);
+		::std::string buffer = getValueIdDescriptor(value);
 		/*
 		* Common value types.
 		*/
@@ -235,8 +271,16 @@ namespace OZW {
 		AddStringProp(nodeobj,  value_id,  buffer.c_str());
 		AddIntegerProp(nodeobj, node_id,   value.GetNodeId());
 		AddIntegerProp(nodeobj, class_id,  value.GetCommandClassId());
-		AddStringProp (nodeobj, type,      OpenZWave::Value::GetTypeNameFromEnum(value.GetType()));
-		AddStringProp (nodeobj, genre,     OpenZWave::Value::GetGenreNameFromEnum(value.GetGenre()));
+#if OPENZWAVE_VALUETYPE_FROM_VALUEID
+		AddStringProp (nodeobj, type,      value.GetTypeAsString());
+		AddStringProp (nodeobj, genre,     value.GetGenreAsString());
+#elif OPENZWAVE_VALUETYPE_FROM_ENUM
+		AddStringProp (nodeobj, type,      OpenZWave::Internal::VC::ValueList::GetTypeNameFromEnum(value.GetType()));
+		AddStringProp (nodeobj, genre,     OpenZWave::Internal::VC::ValueList::GetGenreNameFromEnum(value.GetGenre()));
+#else
+		AddIntegerProp(nodeobj, type,      value.GetType());
+		AddIntegerProp(nodeobj, genre,     value.GetGenre());
+#endif
 		AddIntegerProp(nodeobj, instance,  value.GetInstance());
 		AddIntegerProp(nodeobj, index,     value.GetIndex());
 		AddStringProp (nodeobj, label,     mgr->GetValueLabel(value).c_str());
@@ -258,6 +302,7 @@ namespace OZW {
 		return handle_scope.Escape(valobj);
 	}
 
+#ifdef OPENZWAVE_DEPRECATED16
 	// create a V8 object from a ZWave scene value
 	Local<Object> zwaveSceneValue2v8Value(uint8 sceneId, OpenZWave::ValueID value) {
 		Nan::EscapableHandleScope handle_scope;
@@ -266,6 +311,7 @@ namespace OZW {
 		setSceneValObj(sceneId, valobj, value);
 		return handle_scope.Escape(valobj);
 	}
+#endif
 
 	bool isOzwValue(Local<Object>& o) {
 		return (Nan::HasOwnProperty(o, Nan::New<String>("node_id").ToLocalChecked()).FromJust()
@@ -286,7 +332,8 @@ namespace OZW {
 		index: the index of the command (usually 0)
 */
 	OpenZWave::ValueID* populateValueId(const Nan::FunctionCallbackInfo<v8::Value> &info, uint8 offset) {
-		uint8 nodeid, comclass, instance, index;
+		uint8 nodeid, comclass, instance;
+		OZWValueIdIndex index;
 		if ( (info.Length() >= offset) && info[offset]->IsObject() ) {
 			Local<Object> o = Nan::To<Object>(info[offset]).ToLocalChecked();
 			if (isOzwValue(o)) {
@@ -295,7 +342,7 @@ namespace OZW {
 				instance = Nan::To<Number>(Nan::Get(o, Nan::New<String>("instance").ToLocalChecked()).ToLocalChecked()).ToLocalChecked()->Value();
 				index    = Nan::To<Number>(Nan::Get(o, Nan::New<String>("index").ToLocalChecked()).ToLocalChecked()).ToLocalChecked()->Value();
 			} else {
-				std::string errmsg("OpenZWave valueId object not found: ");
+				::std::string errmsg("OpenZWave valueId object not found: ");
 				Nan::JSON NanJSON;
 				Nan::MaybeLocal<v8::String> result = NanJSON.Stringify(o);
 				if (!result.IsEmpty()) {
@@ -312,13 +359,13 @@ namespace OZW {
 			instance = Nan::To<Number>(info[offset+2]).ToLocalChecked()->Value();
 			index    = Nan::To<Number>(info[offset+3]).ToLocalChecked()->Value();
 		} else {
-			std::string errmsg("OpenZWave valueId not found. Pass either a JS object with {node_id, class_id, instance, index} or the raw values in this order.");
+			::std::string errmsg("OpenZWave valueId not found. Pass either a JS object with {node_id, class_id, instance, index} or the raw values in this order.");
 			Nan::ThrowTypeError(errmsg.c_str());
 			return (NULL);
 		}
 
 		NodeInfo *node = NULL;
-		std::list<OpenZWave::ValueID>::iterator vit;
+		::std::list<OpenZWave::ValueID>::iterator vit;
 
 		if ((node = get_node_info(nodeid))) {
 			for (vit = node->values.begin(); vit != node->values.end(); ++vit) {
@@ -327,8 +374,8 @@ namespace OZW {
 				}
 			}
 		}
-		std::string errmsg(
-			std::string("OpenZWave valueId not found: ") +
+		::std::string errmsg(
+			::std::string("OpenZWave valueId not found: ") +
 			getValueIdDescriptor(nodeid, comclass, instance, index));
 		Nan::ThrowTypeError(errmsg.c_str());
 		return( NULL );
@@ -371,11 +418,11 @@ const char* getControllerErrorAsStr(OpenZWave::Driver::ControllerError _err) {
 }
 
 // backport code from OpenZWave to get notification help message
-const std::string getNotifHelpMsg(Notification const *n) {
+const ::std::string getNotifHelpMsg(Notification const *n) {
 #if OPENZWAVE_SECURITY == 1
 		return n->GetAsString();
 #else
-		std::string str;
+		::std::string str;
 		switch (n->GetType()) {
 			case Notification::Type_ValueAdded:
 				str = "ValueAdded"; break;
@@ -434,7 +481,13 @@ const std::string getNotifHelpMsg(Notification const *n) {
 				str.append(getControllerStateAsStr((OpenZWave::Driver::ControllerState) n->GetByte()));
 				break;
 			case Notification::Type_DriverRemoved:
-				str = "DriverRemoved";				break;
+				str = "DriverRemoved";	break;
+			case Notification::Type_NodeReset:
+				str = "NodeReset"; break;
+			case Notification::Type_UserAlerts:
+				str = "UserAlerts"; break;
+			case Notification::Type_ManufacturerSpecificDBRead:
+				str = "ManuacturerSpecificDBRead"; break;
 		}
 		return str;
 #endif
