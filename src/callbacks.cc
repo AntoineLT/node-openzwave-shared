@@ -26,21 +26,22 @@ namespace OZW {
 //
 uv_async_t async;
 
-//
+// the Nan::Callback reference needs to be exposed as a globar var
+// because most of the callbacks (that need to bubble up to JS-space) will emanate from the C++ land
 Nan::Callback *emit_cb;
 Nan::CopyablePersistentTraits<v8::Object>::CopyablePersistent ctx_obj;
 Nan::AsyncResource *resource;
 
 // Message passing queue between OpenZWave callback and v8 async handler.
 mutex zqueue_mutex;
-std::queue<NotifInfo *> zqueue;
+::std::queue<NotifInfo *> zqueue;
 
 // Node state.
 mutex znodes_mutex;
-std::map<uint8_t, NodeInfo *> znodes;
+::std::map<uint8_t, NodeInfo *> znodes;
 
 mutex zscenes_mutex;
-std::list<SceneInfo *> zscenes;
+::std::list<SceneInfo *> zscenes;
 /*
 * OpenZWave callback, registered in Driver::AddWatcher.
 * Just push onto queue and trigger the handler in v8 land.
@@ -77,20 +78,30 @@ void ozw_watcher_callback(OpenZWave::Notification const *cb, void *ctx)
   case OpenZWave::Notification::Type_ButtonOff:
     notif->buttonid = cb->GetButtonId();
     break;
+#if OPENZWAVE_SCENES
   case OpenZWave::Notification::Type_SceneEvent:
     notif->sceneid = cb->GetSceneId();
     break;
+#endif
   case OpenZWave::Notification::Type_Notification:
     notif->notification = cb->GetNotification();
     break;
-#if OPENZWAVE_SECURITY == 1
+#if OPENZWAVE_SECURITY
   case OpenZWave::Notification::Type_ControllerCommand:
     notif->event = cb->GetEvent();
     notif->notification = cb->GetNotification();
+#if OPENZWAVE_16
+    notif->command = cb->GetCommand();
+#endif
+    break;
+#endif
+#if OPENZWAVE_16
+  case OpenZWave::Notification::Type_UserAlerts:
+    notif->notification = cb->GetUserAlertType();
     break;
 #endif
   }
-
+  // push the notification to the queue
   {
     mutex::scoped_lock sl(zqueue_mutex);
     zqueue.push(notif);
@@ -100,7 +111,7 @@ void ozw_watcher_callback(OpenZWave::Notification const *cb, void *ctx)
 
 // ##### LEGACY MODE ###### //
 #if OPENZWAVE_SECURITY != 1 //
-                            // ######################## //
+// ######################## //
 /*
 * OpenZWave callback, registered in Manager::BeginControllerCommand.
 * Just push onto queue and trigger the handler in v8 land.
@@ -115,7 +126,7 @@ void ozw_ctrlcmd_callback(Driver::ControllerState _state,
   notif->event = _err;
   notif->notification = _state;
   notif->homeid = 0; // use as guard value for legacy mode
-  notif->help = std::string("Controller State: ")
+  notif->help = ::std::string("Controller State: ")
                     .append(getControllerStateAsStr(_state))
                     .append(", Error: ")
                     .append(getControllerErrorAsStr(_err));
@@ -143,6 +154,7 @@ void handleControllerCommand(NotifInfo *notif)
 // ##### END OF LEGACY MODE ###### //
 #endif
 
+ 
 /*
  * handle normal OpenZWave notifications
  */
@@ -179,7 +191,7 @@ void handleNotification(NotifInfo *notif)
   case OpenZWave::Notification::Type_ValueRemoved: {
     //                            ##################
     OpenZWave::ValueID value = notif->values.front();
-    std::list<OpenZWave::ValueID>::iterator vit;
+    ::std::list<OpenZWave::ValueID>::iterator vit;
     if ((node = get_node_info(notif->nodeid))) {
       for (vit = node->values.begin(); vit != node->values.end(); ++vit) {
         if ((*vit) == notif->values.front()) {
@@ -249,10 +261,7 @@ void handleNotification(NotifInfo *notif)
   //                            #################
   case OpenZWave::Notification::Type_NodeRemoved: {
     //                            #################
-    {
-      mutex::scoped_lock sl(znodes_mutex);
-      znodes.erase(notif->nodeid);
-    }
+    delete_node(notif->nodeid);
     emitinfo[0] = Nan::New<String>("node removed").ToLocalChecked();
     emitinfo[1] = Nan::New<Integer>(notif->nodeid);
     emit_cb->Call(Nan::New(ctx_obj),  2, emitinfo, resource);
@@ -417,38 +426,75 @@ void handleNotification(NotifInfo *notif)
     emit_cb->Call(Nan::New(ctx_obj),  4, emitinfo, resource);
     break;
   }
-  case OpenZWave::Notification::Type_DriverRemoved:
-  case OpenZWave::Notification::Type_Group:
+  //                              ##################
+  case OpenZWave::Notification::Type_DriverRemoved: {
+    //                            ##################
+    emitinfo[0] = Nan::New<String>("driver removed").ToLocalChecked();
+    emit_cb->Call(Nan::New(ctx_obj),  1, emitinfo, resource);
+    break;
+  }
+  //                            ###########
+  case OpenZWave::Notification::Type_Group: {
+  //                            ###########
     /* The associations for the node have changed. The
      * application should rebuild any group information it
      * holds about the node.
      */
-    // todo
+      emitinfo[0] = Nan::New<String>("node group").ToLocalChecked();
+      emitinfo[1] = Nan::New<Integer>(notif->nodeid);
+      emit_cb->Call(Nan::New(ctx_obj),  2, emitinfo, resource);
+      break;
+  }
+#if OPENZWAVE_16
+  //                            ##############
+  case OpenZWave::Notification::Type_NodeReset: {
+  //                            ##############
+    delete_node(notif->nodeid);
+    emitinfo[0] = Nan::New<String>("node reset").ToLocalChecked();
+    emitinfo[1] = Nan::New<Integer>(notif->nodeid);
+    emit_cb->Call(Nan::New(ctx_obj),  2, emitinfo, resource);
     break;
-#if OPENZWAVE_SECURITY == 1
-  case OpenZWave::Notification::Type_ControllerCommand:
+  }
+  //                            ##############
+  case OpenZWave::Notification::Type_UserAlerts: {
+  //                            ##############
+    emitinfo[0] = Nan::New<String>("user alert").ToLocalChecked();
+    emitinfo[1] = Nan::New<Integer>(notif->notification); 
+    emitinfo[2] = Nan::New<String>(notif->help.c_str()).ToLocalChecked();
+    emit_cb->Call(Nan::New(ctx_obj),  3, emitinfo, resource);
+    break;
+  }
+  //                            ################################
+  case OpenZWave::Notification::Type_ManufacturerSpecificDBReady: {
+  //                            ################################
+    emitinfo[0] = Nan::New<String>("manufacturer specific DB ready").ToLocalChecked();
+    emit_cb->Call(Nan::New(ctx_obj),  1, emitinfo, resource);
+    break;    
+  }
+#endif
+
+#if OPENZWAVE_SECURITY
+  case OpenZWave::Notification::Type_ControllerCommand: {
     emitinfo[0] = Nan::New<String>("controller command").ToLocalChecked();
     emitinfo[1] = Nan::New<Integer>(notif->nodeid);
     emitinfo[2] = Nan::New<Integer>(notif->event); // Driver::ControllerCommand
     emitinfo[3] =
         Nan::New<Integer>(notif->notification); // Driver::ControllerState
     emitinfo[4] = Nan::New<String>(notif->help.c_str()).ToLocalChecked();
+#if OPENZWAVE_16
+    emitinfo[5] = Nan::New<Integer>(notif->command);
+    emit_cb->Call(Nan::New(ctx_obj),  6, emitinfo, resource);
+#else
     emit_cb->Call(Nan::New(ctx_obj),  5, emitinfo, resource);
+#endif
     break;
-  case OpenZWave::Notification::Type_NodeReset:
-    emitinfo[0] = Nan::New<String>("node reset").ToLocalChecked();
-    emitinfo[1] = Nan::New<Integer>(notif->nodeid);
-    emitinfo[2] = Nan::New<Integer>(notif->event); // Driver::ControllerCommand
-    emitinfo[3] =
-        Nan::New<Integer>(notif->notification); // Driver::ControllerState
-    emit_cb->Call(Nan::New(ctx_obj),  4, emitinfo, resource);
-    break;
+  }
 #endif
   default:
     fprintf(stderr, "Unhandled OpenZWave notification: %d\n", notif->type);
-    break;
-  } // end switch
-}
+    break;  
+} // end switch
+} // end handleNotification
 
 /*
 * Async handler, triggered by the OpenZWave callback.

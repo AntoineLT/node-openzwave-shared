@@ -29,28 +29,29 @@ namespace OZW {
 		Nan::HandleScope scope;
 		CheckMinArgs(1, "path");
 
-		std::string path(*Nan::Utf8String( info[0] ));
+		::std::string path(*Nan::Utf8String( info[0] ));
 
 		uv_async_init(uv_default_loop(), &async, async_cb_handler);
 
-		Local<Function> callbackHandle = Nan::Get( info.This(),
-			Nan::New<String>("emit").ToLocalChecked()
-		).ToLocalChecked()
-		 .As<Function>();
-
-		emit_cb = new Nan::Callback(callbackHandle);
-
 		OZW* self = ObjectWrap::Unwrap<OZW>(info.This());
-
+		::std::string version("");
+#if OPENZWAVE_EXCEPTIONS
+    try {
+#endif
 		OpenZWave::Options::Create(self->config_path, self->userpath, self->option_overrides);
 		OpenZWave::Options::Get()->Lock();
-
 		OpenZWave::Manager::Create();
-		OpenZWave::Manager* mgr = OpenZWave::Manager::Get();
-		mgr->AddWatcher(ozw_watcher_callback, NULL);
-		mgr->AddDriver(path);
-		std::string version(OpenZWave::Manager::getVersionAsString());
-
+		OZWManager(AddWatcher, ozw_watcher_callback, NULL);
+		OZWManager(AddDriver, path);
+		version = OpenZWave::Manager::getVersionAsString();
+#if OPENZWAVE_EXCEPTIONS
+	} catch ( OpenZWave::OZWException& e ) {
+		char buffer [200];
+		snprintf(buffer, 200, "Exception connecting in %s(%d): %s",
+			e.GetFile().c_str(), e.GetLine(), e.GetMsg().c_str());
+		Nan::ThrowError( buffer );
+	}
+#endif
 		Local < v8::Value > cbinfo[16];
 		cbinfo[0] = Nan::New<String>("connected").ToLocalChecked();
 		cbinfo[1] = Nan::New<String>(version).ToLocalChecked();
@@ -59,19 +60,80 @@ namespace OZW {
 	}
 
 	// ===================================================================
+	NAN_METHOD(OZW::UpdateOptions)
+	// ===================================================================
+	{
+		Nan::HandleScope scope;
+		CheckMinArgs(1, "info");
+
+		OZW* self = ObjectWrap::Unwrap<OZW>(info.This());
+		::std::string ozw_userpath;
+		::std::string ozw_config_path;
+
+		::std::string option_overrides;
+		bool log_initialisation = true;
+		// Options are global for all drivers and can only be set once.
+		if (info.Length() > 0) {
+			Local < Object > opts = Nan::To<Object>(info[0]).ToLocalChecked();
+			Local < Array > props = Nan::GetOwnPropertyNames(opts).ToLocalChecked();
+			for (unsigned int i = 0; i < props->Length(); ++i) {
+				Nan::MaybeLocal<Value> keymaybe =  Nan::Get(props, i);
+				if(keymaybe.IsEmpty()) continue;
+				Local<Value>  key       = keymaybe.ToLocalChecked();
+				::std::string keyname   = *Nan::Utf8String(key);
+				Local<Value>  argval    = Nan::Get(opts, key).ToLocalChecked();
+				::std::string argvalstr = *Nan::Utf8String(argval);
+				// UserPath is directly passed to Manager->Connect()
+				// scan for OpenZWave options.xml in the nodeJS module's '/config' subdirectory
+				if (keyname == "UserPath") {
+					ozw_userpath.assign(argvalstr);
+				} else if (keyname == "ConfigPath") {
+					ozw_config_path.assign(argvalstr);
+				} else if (keyname == "LogInitialisation") {
+					log_initialisation = (Nan::To<bool>(argval) == Nan::Just(true));
+				} else {
+					option_overrides += " --" + keyname + " " + argvalstr;
+				}
+			}
+		}
+
+		// Update configuration data for connect.
+		self->config_path = ozw_config_path;
+		self->userpath = ozw_userpath;
+		self->option_overrides = option_overrides;
+		self->log_initialisation = log_initialisation;
+
+	}
+
+	// ===================================================================
 	NAN_METHOD(OZW::Disconnect)
 	// ===================================================================
 	{
 		Nan::HandleScope scope;
 		CheckMinArgs(1, "path");
-		std::string path(*Nan::Utf8String( info[0] ));
+		::std::string path(*Nan::Utf8String( info[0] ));
 
-		OpenZWave::Manager::Get()->RemoveDriver(path);
-		OpenZWave::Manager::Get()->RemoveWatcher(ozw_watcher_callback, NULL);
+		OZWManager( RemoveDriver, path );
+		OZWManager( RemoveWatcher, ozw_watcher_callback, NULL);
+#if OPENZWAVE_EXCEPTIONS
+    try {
+#endif
 		OpenZWave::Manager::Destroy();
 		OpenZWave::Options::Destroy();
-
-		delete emit_cb;
+#if OPENZWAVE_EXCEPTIONS
+	} catch ( OpenZWave::OZWException& e ) {
+		char buffer [200];
+		snprintf(buffer, 200, "Exception disconnecting in %s(%d): %s",
+			 e.GetFile().c_str(), e.GetLine(), e.GetMsg().c_str());
+		Nan::ThrowError( buffer );
+	}
+#endif
+// FIXME: seems some recent innocuous change in NaN causes the context (ctx_obj) to be freed.
+// Therefore, deleting this V8 resource will cause V8 to crash. NOT deleting it could memleak
+// when you're reloading the driver.
+//
+//		delete emit_cb;
+//
 	}
 
 	/*
@@ -83,7 +145,7 @@ namespace OZW {
 	// ===================================================================
 	{
 		Nan::HandleScope scope;
-		OpenZWave::Manager::Get()->ResetController(homeid);
+		OZWManager(ResetController, homeid);
 	}
 
 	// ===================================================================
@@ -91,7 +153,7 @@ namespace OZW {
 	// ===================================================================
 	{
 		Nan::HandleScope scope;
-		OpenZWave::Manager::Get()->SoftReset(homeid);
+		OZWManager(SoftReset, homeid);
 	}
 
 
@@ -100,8 +162,9 @@ namespace OZW {
 	// ===================================================================
 	{
 		Nan::HandleScope scope;
-	 	uint8 ctrlid = OpenZWave::Manager::Get()->GetControllerNodeId (homeid);
-	 	info.GetReturnValue().Set(
+		uint8 ctrlid = -1;
+		OZWManagerAssign(ctrlid, GetControllerNodeId, homeid);
+		info.GetReturnValue().Set(
 			Nan::New<Integer>(ctrlid)
 		);
 	}
@@ -111,8 +174,9 @@ namespace OZW {
 	// ===================================================================
 	{
 		Nan::HandleScope scope;
-	 	uint8 sucid = OpenZWave::Manager::Get()->GetSUCNodeId (homeid);
-	 	info.GetReturnValue().Set(
+		uint8 sucid = -1;
+		OZWManagerAssign(sucid, GetSUCNodeId, homeid);
+		info.GetReturnValue().Set(
 			Nan::New<Integer>(sucid)
 		);
 	}
@@ -127,8 +191,9 @@ namespace OZW {
 	// ===================================================================
 	{
 		Nan::HandleScope scope;
-	 	bool isprimary = OpenZWave::Manager::Get()->IsPrimaryController (homeid);
-	 	info.GetReturnValue().Set(Nan::New<Boolean>(isprimary));
+		bool isprimary = false;
+		OZWManagerAssign(isprimary, IsPrimaryController, homeid);
+		info.GetReturnValue().Set(Nan::New<Boolean>(isprimary));
 	}
 
 	/* Query if the controller is a static update controller. A Static
@@ -141,8 +206,9 @@ namespace OZW {
 	// ===================================================================
 	{
 		Nan::HandleScope scope;
-	 	bool issuc = OpenZWave::Manager::Get()->IsStaticUpdateController (homeid);
-	 	info.GetReturnValue().Set(Nan::New<Boolean>(issuc));
+		bool issuc = false;
+		OZWManagerAssign(issuc, IsStaticUpdateController, homeid);
+		info.GetReturnValue().Set(Nan::New<Boolean>(issuc));
 	}
 
 	/* Query if the controller is using the bridge controller library.
@@ -154,47 +220,50 @@ namespace OZW {
 	// ===================================================================
 	{
 		Nan::HandleScope scope;
-	 	bool isbridge = OpenZWave::Manager::Get()->IsBridgeController (homeid);
-	 	info.GetReturnValue().Set(Nan::New<Boolean>(isbridge));
+		bool isbridge = false;
+		OZWManagerAssign(isbridge, IsBridgeController, homeid);
+		info.GetReturnValue().Set(Nan::New<Boolean>(isbridge));
 	}
 
- 	/* Get the version of the Z-Wave API library used by a controller.
- 	 */
- 	// ===================================================================
+	/* Get the version of the Z-Wave API library used by a controller.
+	 */
+	// ===================================================================
 	NAN_METHOD(OZW::GetLibraryVersion)
 	// ===================================================================
 	{
 		Nan::HandleScope scope;
-	 	std::string libver = OpenZWave::Manager::Get()->GetLibraryVersion (homeid);
-	 	info.GetReturnValue().Set(
+		::std::string libver("");
+		OZWManagerAssign(libver, GetLibraryVersion, homeid);
+		info.GetReturnValue().Set(
 			Nan::New<String>(
 				libver.c_str()
 			).ToLocalChecked()
 		);
 	}
 
- 	/* Get a string containing the Z-Wave API library type used by a
- 	 * controller. The possible library types are:
- 	 * 	Static Controller
- 	 * 	Controller
- 	 * 	Enhanced Slave
- 	 * Slave
- 	 * Installer
- 	 * Routing Slave
- 	 * Bridge Controller
- 	 * Device Under Test
- 	 *
- 	 * The controller should never return a slave library type. For a
- 	 * more efficient test of whether a controller is a Bridge Controller,
- 	 * use the IsBridgeController method.
- 	 */
- 	// ===================================================================
+	/* Get a string containing the Z-Wave API library type used by a
+	 * controller. The possible library types are:
+	 *	Static Controller
+	 *	Controller
+	 *	Enhanced Slave
+	 * Slave
+	 * Installer
+	 * Routing Slave
+	 * Bridge Controller
+	 * Device Under Test
+	 *
+	 * The controller should never return a slave library type. For a
+	 * more efficient test of whether a controller is a Bridge Controller,
+	 * use the IsBridgeController method.
+	 */
+	// ===================================================================
 	NAN_METHOD(OZW::GetLibraryTypeName)
 	// ===================================================================
 	{
 		Nan::HandleScope scope;
-	 	std::string libtype = OpenZWave::Manager::Get()->GetLibraryTypeName (homeid);
-	 	info.GetReturnValue().Set(
+		::std::string libtype("");
+		OZWManagerAssign(libtype, GetLibraryTypeName, homeid);
+		info.GetReturnValue().Set(
 			Nan::New<String>(
 				libtype.c_str()
 			).ToLocalChecked()
@@ -206,8 +275,9 @@ namespace OZW {
 	// ===================================================================
 	{
 		Nan::HandleScope scope;
-	 	uint32 cnt = OpenZWave::Manager::Get()->GetSendQueueCount (homeid);
-	 	info.GetReturnValue().Set(Nan::New<Integer>(cnt));
+		uint32 cnt = 0;
+		OZWManagerAssign(cnt, GetSendQueueCount, homeid);
+		info.GetReturnValue().Set(Nan::New<Integer>(cnt));
 	}
 
 }

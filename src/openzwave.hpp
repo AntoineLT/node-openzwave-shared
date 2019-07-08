@@ -18,6 +18,7 @@
 #ifndef __NODE_OPENZWAVE_HPP_INCLUDED__
 #define __NODE_OPENZWAVE_HPP_INCLUDED__
 
+#include <algorithm>
 #include <iostream>
 #include <sstream>
 #include <list>
@@ -35,10 +36,10 @@
 
 #if defined(_WIN32) || defined( __APPLE__)
     #include <unordered_map>
-    typedef ::std::unordered_map <std::string, OpenZWave::Driver::ControllerCommand> CommandMap;
+    typedef ::std::unordered_map < ::std::string, OpenZWave::Driver::ControllerCommand > CommandMap;
 #else
     #include <tr1/unordered_map>
-    typedef ::std::tr1::unordered_map <std::string, OpenZWave::Driver::ControllerCommand> CommandMap;
+    typedef ::std::tr1::unordered_map< ::std::string, OpenZWave::Driver::ControllerCommand > CommandMap;
 #endif
 
 #include "utils.hpp"
@@ -50,6 +51,7 @@ namespace OZW {
 
 	struct OZW : public ObjectWrap {
 		static NAN_METHOD(New);
+		static NAN_METHOD(Ping);
 		// openzwave-config.cc
 		static NAN_METHOD(SetConfigParam);
 		static NAN_METHOD(RequestConfigParam);
@@ -67,6 +69,7 @@ namespace OZW {
 		static NAN_METHOD(GetSendQueueCount);
 		static NAN_METHOD(Connect);
 		static NAN_METHOD(Disconnect);
+		static NAN_METHOD(UpdateOptions);
 		// openzwave-groups.cc
 		static NAN_METHOD(GetNumGroups);
 		static NAN_METHOD(GetAssociations);
@@ -74,6 +77,9 @@ namespace OZW {
 		static NAN_METHOD(GetGroupLabel);
 		static NAN_METHOD(AddAssociation);
 		static NAN_METHOD(RemoveAssociation);
+#ifdef OPENZWAVE_16
+    static NAN_METHOD(IsMultiInstance);
+#endif
 #if OPENZWAVE_SECURITY == 1
 		static NAN_METHOD(AddNode);
 		static NAN_METHOD(RemoveNode);
@@ -95,7 +101,9 @@ namespace OZW {
 		static NAN_METHOD(BeginControllerCommand);
 #endif
 		static NAN_METHOD(CancelControllerCommand);
+#ifndef OPENZWAVE_DEPRECATED16
 		static NAN_METHOD(WriteConfig);
+#endif
 		static NAN_METHOD(GetDriverStatistics);
 		static NAN_METHOD(GetNodeStatistics);
 		// openzwave-network.cc
@@ -104,12 +112,17 @@ namespace OZW {
 		static NAN_METHOD(HealNetworkNode);
 		static NAN_METHOD(HealNetwork);
 		// openzwave-nodes.cc
+#ifndef OPENZWAVE_DEPRECATED16
 		static NAN_METHOD(SetNodeOn);
 		static NAN_METHOD(SetNodeOff);
 		static NAN_METHOD(SetNodeLevel);
 		static NAN_METHOD(SwitchAllOn);
 		static NAN_METHOD(SwitchAllOff);
-    static NAN_METHOD(PressButton);
+#endif
+#ifdef OPENZWAVE_16
+		static NAN_METHOD(SendRawData);
+#endif
+		static NAN_METHOD(PressButton);
 		static NAN_METHOD(ReleaseButton);
 		//
 		static NAN_METHOD(RefreshNodeInfo);
@@ -129,6 +142,17 @@ namespace OZW {
 		static NAN_METHOD(SetNodeManufacturerName);
 		static NAN_METHOD(GetNodeProductName);
 		static NAN_METHOD(SetNodeProductName);
+
+		static NAN_METHOD(IsNodeInfoReceived);
+		static NAN_METHOD(IsNodeAwake);
+		static NAN_METHOD(IsNodeFailed);
+		static NAN_METHOD(GetNodeDeviceType);
+		static NAN_METHOD(GetNodeRole);
+		static NAN_METHOD(GetNodeRoleString);
+		static NAN_METHOD(GetNodePlusType);
+		static NAN_METHOD(GetNodePlusTypeString);
+		static NAN_METHOD(GetNodeQueryStage);
+		static NAN_METHOD(GetNodeDeviceTypeString);
 		// plain getters
 		static NAN_METHOD(GetNodeMaxBaudRate);
 		static NAN_METHOD(GetNodeVersion);
@@ -146,11 +170,17 @@ namespace OZW {
 		static NAN_METHOD(SetValueLabel);
 		static NAN_METHOD(RefreshValue);
 		static NAN_METHOD(SetChangeVerified);
-    static NAN_METHOD(GetNumSwitchPoints);
-    static NAN_METHOD(GetSwitchPoint);
-    static NAN_METHOD(ClearSwitchPoints);
-    static NAN_METHOD(SetSwitchPoint);
-    static NAN_METHOD(RemoveSwitchPoint);
+		static NAN_METHOD(GetNumSwitchPoints);
+		static NAN_METHOD(GetSwitchPoint);
+		static NAN_METHOD(ClearSwitchPoints);
+		static NAN_METHOD(SetSwitchPoint);
+		static NAN_METHOD(RemoveSwitchPoint);
+#if OPENZWAVE_16
+		static NAN_METHOD(GetValueAsBitSet);
+		static NAN_METHOD(SetBitMask);
+		static NAN_METHOD(GetBitMask);
+		static NAN_METHOD(GetBitSetSize);
+#endif
 		// openzwave-polling.cc
 		static NAN_METHOD(GetPollInterval);
 		static NAN_METHOD(SetPollInterval);
@@ -160,6 +190,8 @@ namespace OZW {
 		static NAN_METHOD(SetPollIntensity);
 		static NAN_METHOD(GetPollIntensity);
 		// openzwave-scenes.cc
+#ifdef OPENZWAVE_DEPRECATED16
+OPENZWAVE_DEPRECATED_WARNINGS_OFF
 		static NAN_METHOD(CreateScene);
 		static NAN_METHOD(RemoveScene);
 		static NAN_METHOD(GetScenes);
@@ -167,11 +199,13 @@ namespace OZW {
 		static NAN_METHOD(RemoveSceneValue);
 		static NAN_METHOD(SceneGetValues);
 		static NAN_METHOD(ActivateScene);
-
-    // Passing configuration around
-    std::string userpath;
-    std::string option_overrides;
-    std::string config_path;
+OPENZWAVE_DEPRECATED_WARNINGS_ON
+#endif
+		// Passing configuration around
+		::std::string userpath;
+		::std::string option_overrides;
+		::std::string config_path;
+		bool log_initialisation;
 	};
 
 	// our ZWave Home ID
